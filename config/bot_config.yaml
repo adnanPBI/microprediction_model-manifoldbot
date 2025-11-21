@@ -1,0 +1,84 @@
+# MikhailMarketMind Bot Configuration
+
+# Target Configuration
+target:
+  user: "MikhailTal"
+  filter_by_user: true
+
+# Betting Strategy
+betting:
+  min_bet: 10
+  max_bet: 100
+  kelly_fraction: 0.25  # Conservative Kelly
+  market_impact_adjustment: true
+
+# Risk Management
+risk:
+  max_portfolio_exposure: 0.5  # Max 50% of capital at risk
+  max_position_size: 0.1        # Max 10% per market
+  min_liquidity: 100            # Min market liquidity to participate
+  stop_loss: -0.2               # Exit if position down 20%
+
+# Prediction Models
+models:
+  ensemble:
+    enabled: true
+    strategy: "weighted_average"  # weighted_average, majority_vote, confidence_weighted
+
+  claude:
+    enabled: true
+    model: "claude-3-5-sonnet-20241022"
+    weight: 1.0
+
+  gpt:
+    enabled: true
+    model: "gpt-4-turbo-preview"
+    weight: 1.0
+
+  ollama:
+    enabled: false
+    model: "llama2"
+    endpoint: "http://localhost:11434"
+    weight: 0.8
+
+# Market Analysis
+analysis:
+  sentiment:
+    enabled: true
+    weight: 0.3
+
+  momentum:
+    enabled: true
+    lookback_hours: 24
+    weight: 0.2
+
+  liquidity:
+    enabled: true
+    min_threshold: 100
+    weight: 0.1
+
+# Decision Thresholds
+thresholds:
+  min_confidence: 0.6      # Min confidence to place bet
+  min_edge: 0.05           # Min probability edge (5%)
+  max_edge: 0.4            # Max edge to believe (sanity check)
+
+# Execution
+execution:
+  update_interval: 300     # Check markets every 5 minutes
+  max_concurrent_markets: 10
+  rebalance_interval: 3600 # Rebalance portfolio hourly
+
+# Learning
+learning:
+  enabled: true
+  adapt_model_weights: true
+  performance_lookback: 100  # Last 100 bets
+  min_bets_for_adjustment: 20
+
+# Logging
+logging:
+  level: "INFO"
+  structured: true
+  save_predictions: true
+  save_trades: true
