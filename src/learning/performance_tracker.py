@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 from datetime import datetime
 from collections import defaultdict
 import numpy as np
+from datetime import datetime, timezone
 
 
 class PerformanceTracker:
@@ -66,7 +67,7 @@ class PerformanceTracker:
             "confidence": confidence,
             "market_prob": market_prob,
             "reasoning": reasoning,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "resolution": None,  # Will be updated when market resolves
             "brier_score": None,
         }

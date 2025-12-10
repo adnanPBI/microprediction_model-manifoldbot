@@ -169,6 +169,30 @@ class ManifoldClient:
         result = self._post("bet", data)
         return Bet(**result)
 
+    def sell_shares(
+        self,
+        market_id: str,
+        outcome: str,
+        shares: Optional[float] = None,
+    ) -> Any:
+        """
+        Sell shares in a market
+
+        Args:
+            market_id: Market ID
+            outcome: "YES" or "NO" (the outcome you hold shares in)
+            shares: Number of shares to sell (None = sell all)
+        """
+        data = {
+            "contractId": market_id,
+            "outcome": outcome,
+        }
+        if shares is not None:
+            data["shares"] = shares
+
+        # Note: Manifold API endpoint for selling is /v0/market/{marketId}/sell
+        return self._post(f"market/{market_id}/sell", data)
+
     # Comment endpoints
 
     def get_comments(self, market_id: str) -> List[Comment]:

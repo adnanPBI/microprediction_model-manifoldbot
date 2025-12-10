@@ -1,6 +1,6 @@
 """Data models for Manifold Markets API"""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
@@ -52,7 +52,8 @@ class Market(BaseModel):
     def time_until_close(self) -> Optional[float]:
         """Hours until market closes"""
         if self.close_time:
-            now = datetime.now().timestamp() * 1000
+            # Use UTC for consistency
+            now = datetime.now(timezone.utc).timestamp() * 1000
             return (self.close_time - now) / (1000 * 3600)
         return None
 

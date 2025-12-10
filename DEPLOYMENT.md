@@ -128,6 +128,34 @@ docker logs -f mikhail-bot
 python -m scripts.dashboard
 ```
 
+## Running with Docker Compose (Recommended)
+
+The easiest way to run the bot, especially with local Ollama support.
+
+1.  **Install Docker & Docker Compose**
+2.  **Configure `.env`**
+3.  **Run:**
+    ```bash
+    docker-compose up -d
+    ```
+
+### Using Local Ollama
+To use local LLMs (Llama 2, Mistral, etc.) without API costs:
+
+1.  Install [Ollama](https://ollama.ai/) on your host machine.
+2.  Pull a model: `ollama pull llama2`
+3.  Start Ollama: `ollama serve`
+4.  In `bot_config.yaml`, enable it:
+    ```yaml
+    models:
+      ollama:
+        enabled: true
+        model: "llama2"
+        endpoint: "http://host.docker.internal:11434" # For Mac/Windows
+        # OR
+        # endpoint: "http://localhost:11434" # For Linux host networking
+    ```
+
 ### Check Portfolio
 
 Access `data/positions.json` and `data/trade_history.json`

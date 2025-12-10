@@ -1,6 +1,7 @@
 """Market momentum analysis"""
 
 from typing import List, Dict, Optional
+from datetime import datetime, timezone
 import numpy as np
 from ..api.models import Market, Bet
 from ..api.client import ManifoldClient
@@ -75,8 +76,9 @@ class MomentumAnalyzer:
 
     def _filter_recent_bets(self, bets: List[Bet]) -> List[Bet]:
         """Filter bets to lookback period"""
-        import time
-        cutoff = (time.time() - self.lookback_hours * 3600) * 1000
+        # [FIX] Use consistent UTC time
+        now_ts = datetime.now(timezone.utc).timestamp() * 1000
+        cutoff = now_ts - (self.lookback_hours * 3600 * 1000)
         return [b for b in bets if b.created_time >= cutoff]
 
     def _calculate_momentum(self, bets: List[Bet]) -> float:
