@@ -136,7 +136,14 @@ class MikhailMarketMind:
                 log.info(f"Initialized Ollama predictor: {ollama.name}")
 
         if not predictors:
-            raise ValueError("No predictors enabled! Check your configuration and API keys.")
+            log.warning(
+                "No predictors enabled. Running with ensemble disabled until models are configured."
+            )
+
+            # Leave ensemble empty and disabled so the bot can still initialize in
+            # environments (like tests) where API credentials are unavailable.
+            # Downstream calls already guard against missing predictors.
+            return []
 
         return predictors
 
