@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: mikhail-bot
+    restart: unless-stopped
+    # "host" network mode allows the bot to access Ollama running on localhost:11434
+    # If on Mac/Windows, use "host.docker.internal" in your config instead
+    network_mode: "host"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env
+    environment:
+      - PYTHONUNBUFFERED=1

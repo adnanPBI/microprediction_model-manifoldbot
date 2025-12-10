@@ -122,5 +122,5 @@ REASONING: Based on historical data and current trends, I estimate a 65% chance 
                     return self._parse_response(response_text)
 
         except Exception as e:
-            # print(f"Ollama prediction error: {e}")
+            print(f"Ollama prediction error: {e}")
             return None

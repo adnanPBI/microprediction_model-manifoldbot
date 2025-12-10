@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class PortfolioManager:
@@ -79,7 +79,7 @@ class PortfolioManager:
             "shares": shares,
             "prediction": prediction,
             "reasoning": reasoning,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         self.positions[market_id] = position
@@ -121,7 +121,7 @@ class PortfolioManager:
             "entry_price": entry_price,
             "shares": shares,
             "reasoning": reasoning,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "type": "hedge"
         }
 
@@ -169,7 +169,7 @@ class PortfolioManager:
             "exit_price": exit_price,
             "realized_pnl": realized_pnl,
             "reason": reason,
-            "close_timestamp": datetime.now().isoformat(),
+            "close_timestamp": datetime.now(timezone.utc).isoformat(),
         })
         self._save_history()
 

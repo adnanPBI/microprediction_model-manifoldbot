@@ -70,15 +70,17 @@ class KellyBetting:
         effective_pred_prob = predicted_prob if edge > 0 else (1 - predicted_prob)
         effective_market_prob = market_prob if edge > 0 else (1 - market_prob)
 
+        # [FIX] Clamp probability to avoid division by zero or infinity
+        # Manifold markets can hit 0.0 or 1.0 occasionally
+        effective_market_prob = max(0.001, min(0.999, effective_market_prob))
+
         # Kelly formula: f = (bp - q) / b
         # where b = odds, p = win probability, q = 1 - p
         # For binary markets: f = p - (1-p) / odds
-        if effective_market_prob <= 0 or effective_market_prob >= 1:
-            return None
-
         odds = (1 - effective_market_prob) / effective_market_prob
 
-        if odds == 0:
+        # [FIX] Double check odds isn't zero (redundant but safe)
+        if odds <= 0:
             return None
 
         kelly_fraction_full = (effective_pred_prob * (odds + 1) - 1) / odds

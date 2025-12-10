@@ -75,18 +75,21 @@ class RiskManager:
         Returns:
             (is_eligible, reason)
         """
-        # Check position size limit
-        if bet_size > bankroll * self.max_position_size:
-            return False, f"Bet exceeds max position size: {bet_size:.2f} > {bankroll * self.max_position_size:.2f}"
+        # Calculate current exposure to this market
+        current_market_exposure = current_positions.get(market_id, 0.0)
+        new_total_exposure = current_market_exposure + bet_size
+
+        # Check position size limit (Total exposure vs Bankroll)
+        if new_total_exposure > bankroll * self.max_position_size:
+            return False, f"Bet exceeds max position size. New total: {new_total_exposure:.2f} > Limit: {bankroll * self.max_position_size:.2f}"
 
         # Check portfolio exposure limit
-        total_exposure = sum(abs(v) for v in current_positions.values()) + bet_size
-        if total_exposure > bankroll * self.max_portfolio_exposure:
-            return False, f"Bet exceeds max portfolio exposure: {total_exposure:.2f} > {bankroll * self.max_portfolio_exposure:.2f}"
+        # Sum of all OTHER positions + new total for this position
+        other_positions_exposure = sum(v for k, v in current_positions.items() if k != market_id)
+        total_portfolio_exposure = other_positions_exposure + new_total_exposure
 
-        # Check if we already have a position in this market
-        if market_id in current_positions:
-            return False, "Already have position in this market"
+        if total_portfolio_exposure > bankroll * self.max_portfolio_exposure:
+            return False, f"Bet exceeds max portfolio exposure: {total_portfolio_exposure:.2f} > {bankroll * self.max_portfolio_exposure:.2f}"
 
         return True, "Bet eligible"
 
