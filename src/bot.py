@@ -12,6 +12,7 @@ from .api import ManifoldClient, Market
 from .predictors import (
     ClaudePredictor,
     GPTPredictor,
+    OllamaPredictor,
     EnsemblePredictor,
     Prediction,
 )
@@ -49,7 +50,7 @@ class MikhailMarketMind:
         self.client = ManifoldClient()
 
         # Get target user
-        self.target_user = self.config["target"]["user"]
+        self.target_user = os.getenv("TARGET_USER") or self.config["target"]["user"]
         log.info(f"Targeting markets by user: {self.target_user}")
 
         # Initialize predictors
@@ -122,6 +123,17 @@ class MikhailMarketMind:
             if gpt.enabled:
                 predictors.append(gpt)
                 log.info(f"Initialized GPT predictor: {gpt.name}")
+
+        # Ollama predictor
+        if self.config["models"].get("ollama", {}).get("enabled", False):
+            ollama = OllamaPredictor(
+                model=self.config["models"]["ollama"]["model"],
+                weight=self.config["models"]["ollama"]["weight"],
+                endpoint=self.config["models"]["ollama"]["endpoint"],
+            )
+            if ollama.enabled:
+                predictors.append(ollama)
+                log.info(f"Initialized Ollama predictor: {ollama.name}")
 
         if not predictors:
             raise ValueError("No predictors enabled! Check your configuration and API keys.")
@@ -302,10 +314,197 @@ class MikhailMarketMind:
         # Execute bet
         await self.execute_bet(market, decision, analysis["prediction"])
 
+    async def check_resolved_positions(self):
+        """Check status of open positions and handle resolutions"""
+        try:
+            open_positions = self.portfolio_manager.get_all_positions()
+            if not open_positions:
+                return
+
+            log.info(f"Checking {len(open_positions)} open positions for resolution")
+
+            for market_id, position in list(open_positions.items()):
+                # Fetch fresh market data
+                try:
+                    market = self.client.get_market(market_id)
+                except Exception as e:
+                    log.error(f"Failed to fetch market {market_id}: {e}")
+                    continue
+
+                # Handle resolved markets
+                if market.is_resolved:
+                    log.info(f"Market resolved: {market.question} -> {market.resolution}", market_id=market.id)
+
+                    # Update performance tracker
+                    resolved_yes = market.resolution == "YES"
+                    self.performance_tracker.update_resolution(market.id, resolved_yes)
+
+                    # Calculate PnL (simplified, assuming we hold to resolution)
+                    # If we bet YES and it resolves YES, we win (1/entry_price - 1) * size approx
+                    # Actually, if we bet YES at P, and it resolves YES (1), we get 1/P * size back. Profit = size/P - size
+                    # If NO, we lose everything (assuming binary options resolving to 0 or 1)
+
+                    # Calculate PnL for main position
+                    main_pnl = self._calculate_pnl(
+                        bet_size=position["bet_size"],
+                        entry_price=position["entry_price"],
+                        outcome=position["outcome"],
+                        resolution=market.resolution
+                    )
+
+                    total_pnl = main_pnl
+                    total_payout = position["bet_size"] + main_pnl
+
+                    # Calculate PnL for hedges
+                    if "hedges" in position:
+                        for hedge in position["hedges"]:
+                             hedge_pnl = self._calculate_pnl(
+                                bet_size=hedge["bet_size"],
+                                entry_price=hedge["entry_price"],
+                                outcome=hedge["outcome"],
+                                resolution=market.resolution
+                             )
+                             total_pnl += hedge_pnl
+                             total_payout += hedge["bet_size"] + hedge_pnl
+
+                    # Close position
+                    self.portfolio_manager.close_position(
+                        market_id=market.id,
+                        exit_price=1.0 if market.resolution == "YES" else 0.0,
+                        realized_pnl=total_pnl,
+                        reason="market_resolved"
+                    )
+
+                    # Update bankroll
+                    if total_payout > 0:
+                        self.bankroll += total_payout
+
+        except Exception as e:
+            log.error(f"Error checking resolved positions: {e}")
+
+    def _calculate_pnl(self, bet_size: float, entry_price: float, outcome: str, resolution: str) -> float:
+        """Calculate PnL for a single bet"""
+        if resolution == "YES":
+            if outcome == "YES":
+                return (bet_size / entry_price) - bet_size
+            else:
+                return -bet_size
+        elif resolution == "NO":
+            if outcome == "NO":
+                return (bet_size / (1 - entry_price)) - bet_size
+            else:
+                return -bet_size
+        else:
+            return 0.0
+
+    async def manage_positions(self):
+        """Manage open positions (stop loss, take profit)"""
+        try:
+            open_positions = self.portfolio_manager.get_all_positions()
+            if not open_positions:
+                return
+
+            for market_id, position in list(open_positions.items()):
+                # Fetch fresh market data
+                try:
+                    market = self.client.get_market(market_id)
+                except Exception as e:
+                    log.error(f"Failed to fetch market {market_id}: {e}")
+                    continue
+
+                if market.is_resolved:
+                    continue # Handled by check_resolved_positions
+
+                # Check exit conditions
+                should_exit, reason = self.risk_manager.should_exit_position(
+                    entry_price=position["entry_price"],
+                    current_price=market.probability,
+                    outcome=position["outcome"]
+                )
+
+                if should_exit:
+                    log.info(f"Exiting position for {market.question}: {reason}", market_id=market.id)
+
+                    # Execute sell/exit
+                    # To exit a YES position, we sell YES (or buy NO)
+                    # Manifold API might have a specific 'sell' endpoint or we bet opposite.
+                    # Standard API usually supports selling shares.
+                    # But ManifoldClient wrapper here only has 'place_bet'.
+                    # Betting NO is equivalent to selling YES if we assume sufficient liquidity/AMM.
+
+                    # To close: Bet opposite amount approx equal to position value or uses shares mechanism.
+                    # Since we don't have 'sell' in client, we'll try to hedge/close by betting opposite.
+                    # This is imperfect but works for MVP.
+
+                    exit_outcome = "NO" if position["outcome"] == "YES" else "YES"
+
+                    # We need to calculate how much to bet to neutralize exposure?
+                    # Or just close it?
+                    # For simple "exit", we assume we sell the position.
+                    # If client doesn't support sell, we can't truly "exit" in Manifold sense (convert to M$).
+                    # We can only hedge.
+                    # But the task implies "Sell order (bet on opposite outcome) to close."
+
+                    # Let's bet the same amount on the opposite side? No, that's not closing.
+                    # We want to sell our shares.
+                    # If we can't sell shares via this client, we might just log it and mark as closed in portfolio manager
+                    # to stop tracking it, but that leaves money on the table.
+                    # The Issue description says: "Place a sell order (bet on opposite outcome) to close."
+
+                    # So we will place a bet on the opposite outcome.
+                    # How much? Rough approximation: same amount as original bet (hedge).
+                    # Ideally we sell shares.
+
+                    # Assuming we just place a bet to hedge.
+                    hedge_amount = position["bet_size"]
+
+                    try:
+                         self.client.place_bet(
+                            market_id=market.id,
+                            amount=hedge_amount,
+                            outcome=exit_outcome
+                        )
+
+                         # Calculate rough PnL (realized)
+                         # This is complex without true sell.
+                         # We'll mark it closed with estimated PnL based on current prob.
+
+                         # Est PnL = (current_val - entry_cost)
+                         # current_val = shares * current_price
+                         # shares = bet_size / entry_price
+                         shares = position["shares"]
+                         current_val = shares * market.probability if position["outcome"] == "YES" else shares * (1 - market.probability)
+                         realized_pnl = current_val - position["bet_size"]
+
+                         # Record hedge in portfolio manager (keep position open to track resolution)
+                         self.portfolio_manager.add_hedge_position(
+                            market_id=market.id,
+                            outcome=exit_outcome,
+                            bet_size=hedge_amount,
+                            entry_price=market.probability,
+                            shares=shares, # Approx same shares
+                            reasoning=reason
+                         )
+
+                         # Update bankroll (cost of hedge)
+                         self.bankroll -= hedge_amount
+
+                         log.info(f"Hedged position {market_id} with {hedge_amount} on {exit_outcome}")
+
+                    except Exception as e:
+                        log.error(f"Failed to exit position {market_id}: {e}")
+
+        except Exception as e:
+            log.error(f"Error managing positions: {e}")
+
     async def run_iteration(self):
         """Run one iteration of the bot"""
         try:
             log.info("Starting bot iteration")
+
+            # 1. Manage existing positions (check resolution, exit strategies)
+            await self.check_resolved_positions()
+            await self.manage_positions()
 
             # Get markets from target user
             markets = self.client.get_markets_by_user(

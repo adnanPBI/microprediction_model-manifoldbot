@@ -199,7 +199,16 @@ class ManifoldClient:
 
         # Calculate investment value from positions
         # Note: This is simplified, actual calculation would need current market prices
-        investment_value = 0  # Would need to sum all position values
+        # For now, we utilize totalNetWorth from API if available to estimate investment value
+        investment_value = 0
+        try:
+             # Ideally we would sum up open positions values.
+             # Since we don't have a direct way to distinguish open/closed bets without extensive queries,
+             # we rely on the API's 'totalNetWorth' if available.
+             if "totalNetWorth" in data:
+                 investment_value = max(0, float(data["totalNetWorth"]) - balance)
+        except Exception:
+            pass
 
         return Portfolio(
             user_id=data["id"],

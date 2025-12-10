@@ -92,6 +92,54 @@ class PortfolioManager:
         })
         self._save_history()
 
+    def add_hedge_position(
+        self,
+        market_id: str,
+        outcome: str,
+        bet_size: float,
+        entry_price: float,
+        shares: float,
+        reasoning: str,
+    ):
+        """
+        Add a hedge/exit bet to an existing position
+
+        Args:
+            market_id: Market ID
+            outcome: YES or NO
+            bet_size: Amount bet
+            entry_price: Entry probability
+            shares: Shares purchased
+            reasoning: Reason for hedging
+        """
+        if market_id not in self.positions:
+            return
+
+        hedge_info = {
+            "outcome": outcome,
+            "bet_size": bet_size,
+            "entry_price": entry_price,
+            "shares": shares,
+            "reasoning": reasoning,
+            "timestamp": datetime.now().isoformat(),
+            "type": "hedge"
+        }
+
+        # Initialize hedges list if not present
+        if "hedges" not in self.positions[market_id]:
+            self.positions[market_id]["hedges"] = []
+
+        self.positions[market_id]["hedges"].append(hedge_info)
+        self._save_positions()
+
+        # Add to history
+        self.trade_history.append({
+            "market_id": market_id,
+            **hedge_info,
+            "action": "hedge_open",
+        })
+        self._save_history()
+
     def close_position(
         self,
         market_id: str,

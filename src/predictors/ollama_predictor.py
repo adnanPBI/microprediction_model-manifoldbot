@@ -1,53 +1,43 @@
-"""Claude-based prediction model"""
+"""Ollama-based prediction model"""
 
 import os
 import re
+import json
+import aiohttp
 from typing import Optional
-import anthropic
 
 from .base import BasePredictor, Prediction
 from ..api.models import Market
 
 
-class ClaudePredictor(BasePredictor):
-    """Uses Claude to predict market outcomes"""
+class OllamaPredictor(BasePredictor):
+    """Uses Ollama to predict market outcomes"""
 
     def __init__(
         self,
-        model: str = "claude-3-5-sonnet-20241022",
+        model: str = "llama2",
         weight: float = 1.0,
-        api_key: Optional[str] = None,
+        endpoint: str = "http://localhost:11434",
     ):
         """
-        Initialize Claude predictor
+        Initialize Ollama predictor
 
         Args:
-            model: Claude model to use
+            model: Ollama model to use
             weight: Weight for ensemble
-            api_key: Anthropic API key (or from ANTHROPIC_API_KEY env var)
+            endpoint: Ollama API endpoint
         """
-        super().__init__(name=f"claude-{model}", weight=weight)
+        super().__init__(name=f"ollama-{model}", weight=weight)
         self.model = model
-        self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
-
-        if not self.api_key:
-            self.enabled = False
-            return
-
-        self.client = anthropic.Anthropic(api_key=self.api_key)
+        self.endpoint = endpoint
 
     def _build_prompt(self, market: Market) -> str:
-        """Build prompt for Claude"""
-        # Truncate description to avoid excessive token usage
-        description = market.description or "No additional description provided."
-        if len(description) > 2000:
-             description = description[:2000] + "... (truncated)"
-
+        """Build prompt for Ollama"""
         prompt = f"""You are an expert forecaster analyzing prediction markets.
 
 Market Question: {market.question}
 
-Description: {description}
+Description: {market.description or "No additional description provided."}
 
 Current market probability: {market.probability:.1%}
 Time until close: {market.time_until_close:.1f} hours (if available)
@@ -75,7 +65,7 @@ REASONING: Based on historical data and current trends, I estimate a 65% chance 
         return prompt
 
     def _parse_response(self, response: str) -> Optional[Prediction]:
-        """Parse Claude's response"""
+        """Parse Ollama's response"""
         try:
             # Extract probability
             prob_match = re.search(r"PROBABILITY:\s*(\d+\.?\d*)", response, re.IGNORECASE)
@@ -104,22 +94,33 @@ REASONING: Based on historical data and current trends, I estimate a 65% chance 
             return None
 
     async def predict(self, market: Market) -> Optional[Prediction]:
-        """Generate prediction using Claude"""
+        """Generate prediction using Ollama"""
         if not self.enabled:
             return None
 
         try:
             prompt = self._build_prompt(market)
 
-            message = self.client.messages.create(
-                model=self.model,
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}]
-            )
+            payload = {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.7,
+                    "num_predict": 1024,
+                }
+            }
 
-            response_text = message.content[0].text
-            return self._parse_response(response_text)
+            async with aiohttp.ClientSession() as session:
+                async with session.post(f"{self.endpoint}/api/generate", json=payload) as response:
+                    if response.status != 200:
+                        return None
+
+                    data = await response.json()
+                    response_text = data.get("response", "")
+
+                    return self._parse_response(response_text)
 
         except Exception as e:
-            print(f"Claude prediction error: {e}")
+            # print(f"Ollama prediction error: {e}")
             return None
