@@ -38,11 +38,16 @@ class GPTPredictor(BasePredictor):
 
     def _build_prompt(self, market: Market) -> str:
         """Build prompt for GPT"""
+        # Truncate description to avoid excessive token usage
+        description = market.description or "No additional description provided."
+        if len(description) > 2000:
+             description = description[:2000] + "... (truncated)"
+
         prompt = f"""You are an expert forecaster analyzing prediction markets.
 
 Market Question: {market.question}
 
-Description: {market.description or "No additional description provided."}
+Description: {description}
 
 Current market probability: {market.probability:.1%}
 Time until close: {market.time_until_close:.1f} hours (if available)

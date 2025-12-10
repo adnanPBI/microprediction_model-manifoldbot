@@ -21,6 +21,8 @@ class SentimentAnalyzer:
         "weak", "bad", "negative", "fail"
     }
 
+    NEGATION_WORDS = {"not", "no", "never", "don't", "cant", "cannot", "wont", "won't"}
+
     def __init__(self, client: ManifoldClient):
         """
         Initialize sentiment analyzer
@@ -67,9 +69,34 @@ class SentimentAnalyzer:
             Sentiment score (0 = bearish, 0.5 = neutral, 1 = bullish)
         """
         text = comment.text.lower()
+        words = text.split()
 
-        positive_count = sum(1 for word in self.POSITIVE_KEYWORDS if word in text)
-        negative_count = sum(1 for word in self.NEGATIVE_KEYWORDS if word in text)
+        positive_count = 0
+        negative_count = 0
+
+        # Simple window-based negation handling
+        for i, word in enumerate(words):
+            # Check for negation in previous 2 words
+            is_negated = False
+            start_idx = max(0, i - 2)
+            for prev_word in words[start_idx:i]:
+                if prev_word in self.NEGATION_WORDS:
+                    is_negated = True
+                    break
+
+            # Clean word for matching
+            clean_word = "".join(c for c in word if c.isalnum())
+
+            if clean_word in self.POSITIVE_KEYWORDS:
+                if is_negated:
+                    negative_count += 1
+                else:
+                    positive_count += 1
+            elif clean_word in self.NEGATIVE_KEYWORDS:
+                if is_negated:
+                    positive_count += 1
+                else:
+                    negative_count += 1
 
         total = positive_count + negative_count
         if total == 0:
