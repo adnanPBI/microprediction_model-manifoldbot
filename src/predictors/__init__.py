@@ -4,6 +4,7 @@ from .base import BasePredictor, Prediction
 from .ensemble import EnsemblePredictor
 from .claude_predictor import ClaudePredictor
 from .gpt_predictor import GPTPredictor
+from .ollama_predictor import OllamaPredictor
 
 __all__ = [
     "BasePredictor",
@@ -11,4 +12,5 @@ __all__ = [
     "EnsemblePredictor",
     "ClaudePredictor",
     "GPTPredictor",
+    "OllamaPredictor",
 ]

@@ -73,7 +73,14 @@ class KellyBetting:
         # Kelly formula: f = (bp - q) / b
         # where b = odds, p = win probability, q = 1 - p
         # For binary markets: f = p - (1-p) / odds
+        if effective_market_prob <= 0 or effective_market_prob >= 1:
+            return None
+
         odds = (1 - effective_market_prob) / effective_market_prob
+
+        if odds == 0:
+            return None
+
         kelly_fraction_full = (effective_pred_prob * (odds + 1) - 1) / odds
 
         # Apply fractional Kelly

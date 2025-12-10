@@ -106,7 +106,11 @@ class EnsemblePredictor(BasePredictor):
             weights = np.ones_like(weights) / len(weights)
 
         ensemble_prob = (probabilities * weights).sum()
-        ensemble_confidence = (weights ** 2).sum()  # Weighted confidence
+
+        # Original issue: ensemble_confidence = (weights ** 2).sum() which is usually lower than individual confidences
+        # Use a better metric, e.g., weighted average of confidences
+        raw_confidences = np.array([p.confidence for p in predictions])
+        ensemble_confidence = (raw_confidences * weights).sum()
 
         reasoning_parts = [
             f"{p.model_name}: {p.probability:.2%} (conf: {p.confidence:.2%})"
