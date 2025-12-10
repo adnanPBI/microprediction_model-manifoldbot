@@ -60,18 +60,72 @@ class PortfolioManager:
         reasoning: Optional[str] = None,
     ):
         """
-        Add a new position
-
-        Args:
-            market_id: Market ID
-            outcome: YES or NO
-            bet_size: Amount bet
-            entry_price: Entry probability
-            shares: Shares purchased
-            prediction: Predicted probability
-            reasoning: Optional reasoning for the bet
+        Add a new position or update an existing one (Scaling In)
         """
-        position = {
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        if market_id in self.positions:
+            # --- MERGE LOGIC ---
+            existing = self.positions[market_id]
+
+            # If outcomes match, merge them
+            if existing["outcome"] == outcome:
+                # Calculate weighted average entry price
+                total_shares_old = existing["shares"]
+                # Avoid div by zero if shares are somehow 0
+                avg_price_old = existing["entry_price"]
+
+                # New Weighted Average Price = (OldVal + NewVal) / TotalShares
+                # Val = Shares * Price
+                # Note: This is an approximation. Manifold tracks the true pool price.
+                current_val_est = total_shares_old * avg_price_old
+                new_val_est = shares * entry_price
+
+                new_total_shares = total_shares_old + shares
+                new_avg_price = (current_val_est + new_val_est) / new_total_shares if new_total_shares > 0 else entry_price
+
+                # Update State
+                existing["shares"] = new_total_shares
+                existing["bet_size"] += bet_size
+                existing["entry_price"] = new_avg_price
+                existing["prediction"] = prediction # Update to latest conviction
+                existing["timestamp"] = timestamp
+
+                action_type = "add" # Scaling in
+            else:
+                # Opposing bet (e.g. switching from YES to NO or hedging)
+                # For this bot, we'll overwrite for simplicity as the bot doesn't support hedging logic yet
+                # ideally, this shouldn't happen given RiskManager checks.
+                self.positions[market_id] = {
+                    "market_id": market_id,
+                    "outcome": outcome,
+                    "bet_size": bet_size,
+                    "entry_price": entry_price,
+                    "shares": shares,
+                    "prediction": prediction,
+                    "reasoning": reasoning,
+                    "timestamp": timestamp,
+                }
+                action_type = "flip"
+
+        else:
+            # --- NEW POSITION ---
+            self.positions[market_id] = {
+                "market_id": market_id,
+                "outcome": outcome,
+                "bet_size": bet_size,
+                "entry_price": entry_price,
+                "shares": shares,
+                "prediction": prediction,
+                "reasoning": reasoning,
+                "timestamp": timestamp,
+            }
+            action_type = "open"
+
+        self._save_positions()
+
+        # Add to history
+        self.trade_history.append({
             "market_id": market_id,
             "outcome": outcome,
             "bet_size": bet_size,
@@ -79,16 +133,8 @@ class PortfolioManager:
             "shares": shares,
             "prediction": prediction,
             "reasoning": reasoning,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
-        self.positions[market_id] = position
-        self._save_positions()
-
-        # Add to history
-        self.trade_history.append({
-            **position,
-            "action": "open",
+            "timestamp": timestamp,
+            "action": action_type,
         })
         self._save_history()
 
